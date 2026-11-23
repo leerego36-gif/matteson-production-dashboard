@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Matteson Pulse Point Tracker — Production Dashboard</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Google Fonts: Inter & Noto Sans KR -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans KR', sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col lg:h-screen lg:overflow-hidden">
+
+  <!-- Top Header & KPI Summary Bar -->
+  <header class="bg-slate-900 text-white px-4 py-3 shadow-md shrink-0">
+    <div class="max-w-[1600px] mx-auto flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+      <!-- Brand / Title -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-indigo-500 flex items-center justify-center font-bold text-lg shadow-inner">
+            M
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-base sm:text-lg font-bold tracking-tight">Matteson Pulse Point Tracker</h1>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                ALL TAB · LIVE SAMPLE
+              </span>
+            </div>
+            <p id="headerSubtitle" class="text-xs text-slate-400">월별 총합 생산 실적·예측(Forecast) 및 일일 Line 1~4 생산 현황 대시보드 (PLTS)</p>
+          </div>
+        </div>
+
+        <!-- Mobile Controls (Language + Update) -->
+        <div class="xl:hidden flex items-center gap-1.5">
+          <div class="inline-flex rounded-lg bg-slate-800 p-0.5 border border-slate-700">
+            <button id="btnLangKoMobile" onclick="setLanguage('ko')" class="px-2 py-1 rounded-md text-[11px] font-semibold bg-indigo-600 text-white transition cursor-pointer">
+              한글
+            </button>
+            <button id="btnLangEnMobile" onclick="setLanguage('en')" class="px-2 py-1 rounded-md text-[11px] font-medium text-slate-300 hover:text-white transition cursor-pointer">
+              EN
+            </button>
+          </div>
+          <button id="btnUpdateMobile" onclick="openDataModal()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 transition cursor-pointer">
+            데이터 업데이트
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards + Actions -->
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+        <!-- KPI 1: YTD Actual vs Forecast -->
+        <div class="bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-1.5 flex items-center gap-3">
+          <div>
+            <div id="kpiYtdTitle" class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">연간 누적 실적 / 예측</div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiYtdActual" class="text-sm sm:text-base font-bold text-white">-</span>
+              <span class="text-xs text-slate-400">/ <span id="kpiYtdPlan">-</span></span>
+            </div>
+          </div>
+          <span id="kpiYtdRate" class="text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300">0%</span>
+        </div>
+
+        <!-- KPI 2: Selected Month Actual vs Forecast -->
+        <div class="bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-1.5 flex items-center gap-3">
+          <div>
+            <div id="kpiMonthTitle" class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+              11월 실적 / 예측
+            </div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiMonthActual" class="text-sm sm:text-base font-bold text-sky-400">-</span>
+              <span class="text-xs text-slate-400">/ <span id="kpiMonthPlan">-</span></span>
+            </div>
+          </div>
+          <span id="kpiMonthRate" class="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300">0%</span>
+        </div>
+
+        <!-- KPI 3: Selected Month Daily Avg -->
+        <div class="hidden sm:flex bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-1.5 items-center gap-3">
+          <div>
+            <div id="kpiDailyTitle" class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">가동일 일평균 실적 / 예측</div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="kpiDailyAvg" class="text-sm sm:text-base font-bold text-amber-300">-</span>
+              <span class="text-xs text-slate-400">/ <span id="kpiDailyPlanAvg">-</span></span>
+            </div>
+          </div>
+          <span id="kpiDailyRate" class="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300">0%</span>
+        </div>
+
+        <!-- Language Switcher (Desktop) -->
+        <div class="hidden xl:inline-flex rounded-xl bg-slate-800 p-1 border border-slate-700">
+          <button id="btnLangKoDesktop" onclick="setLanguage('ko')" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-xs transition cursor-pointer">
+            한글
+          </button>
+          <button id="btnLangEnDesktop" onclick="setLanguage('en')" class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition cursor-pointer">
+            English
+          </button>
+        </div>
+
+        <!-- Data Update Button (Desktop) -->
+        <button onclick="openDataModal()" class="hidden xl:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white shadow-sm transition cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          <span id="btnUpdateDesktopText">시트 데이터 붙여넣기</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Single-Screen Dashboard Content -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-3 sm:p-4 grid grid-rows-1 lg:grid-rows-2 gap-3 sm:gap-4 overflow-y-auto lg:overflow-hidden">
+
+    <!-- TOP SECTION (1): 월 총합 생산량 실적(막대) vs 예측(선 그래프) -->
+    <section class="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-3.5 sm:p-4 flex flex-col min-h-[320px] lg:min-h-0">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2 shrink-0">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+            <h2 id="topChartTitle" class="text-sm sm:text-base font-bold text-slate-800">1. 월별 총합 생산량 실적(막대) vs 예측(선 그래프)</h2>
+          </div>
+          <p id="topChartDesc" class="text-xs text-slate-500 mt-0.5">차이 확대(Auto)가 기본 적용되어 예측과 실적 편차가 선명하게 보입니다. 월 막대 클릭 시 하단 차트가 연동됩니다.</p>
+        </div>
+
+        <!-- Top Chart Controls -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Y-Axis Scale Mode Toggle (Top) -->
+          <div class="inline-flex rounded-xl bg-amber-50/90 p-1 border border-amber-200">
+            <button id="btnMonthlyScaleAuto" onclick="setMonthlyScaleMode('auto')" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-amber-700 shadow-xs transition cursor-pointer">
+              차이 확대 (Auto)
+            </button>
+            <button id="btnMonthlyScaleZero" onclick="setMonthlyScaleMode('zero')" class="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition cursor-pointer">
+              0 기준 (Full)
+            </button>
+          </div>
+
+          <div class="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200/70">
+            <button id="btnMonthlyTotalBar" onclick="setMonthlyMode('total')" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-indigo-700 shadow-xs transition cursor-pointer">
+              총합 막대
+            </button>
+            <button id="btnMonthlyStackedBar" onclick="setMonthlyMode('stacked')" class="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition cursor-pointer">
+              Line 1~4 누적 막대
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Chart Canvas Container -->
+      <div class="relative flex-1 w-full min-h-0">
+        <canvas id="monthlyChart"></canvas>
+      </div>
+    </section>
+
+    <!-- BOTTOM SECTION (2): 일일 Line 1, 2, 3, 4 생산량 실적(막대) -->
+    <section class="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-3.5 sm:p-4 flex flex-col min-h-[350px] lg:min-h-0">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2 shrink-0">
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
+              <h2 id="bottomChartTitle" class="text-sm sm:text-base font-bold text-slate-800">
+                2. 일일 Line 1, 2, 3, 4 생산 실적 (병렬 막대)
+              </h2>
+            </div>
+            <p id="bottomChartDesc" class="text-xs text-slate-500 mt-0.5">선택된 월의 일자별 Line 1~4 가동 실적 비교 (PLTS)</p>
+          </div>
+
+          <!-- Month Selector Dropdown -->
+          <div class="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-xl px-2.5 py-1">
+            <label id="monthSelectLabel" for="monthSelect" class="text-xs font-semibold text-indigo-800">조회 월:</label>
+            <select id="monthSelect" onchange="handleMonthChange(this.value)" class="bg-transparent text-xs font-bold text-indigo-900 focus:outline-none cursor-pointer">
+            </select>
+          </div>
+
+          <!-- Daily Line Average Tier Count Badges -->
+          <div id="avgTierStats" class="flex flex-wrap items-center gap-1.5">
+            <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200 text-xs">
+              <span id="lblUnder340" class="font-medium text-slate-600">평균 340 미만:</span>
+              <span id="cntUnder340" class="font-bold text-slate-800">0일</span>
+            </div>
+            <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-sky-50 border border-sky-200 text-xs">
+              <span id="lblOver340" class="font-medium text-sky-700">340 초과:</span>
+              <span id="cntOver340" class="font-bold text-sky-900">0일</span>
+            </div>
+            <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 border border-indigo-200 text-xs">
+              <span id="lblOver360" class="font-medium text-indigo-700">360 초과:</span>
+              <span id="cntOver360" class="font-bold text-indigo-900">0일</span>
+            </div>
+            <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+              <span id="lblOver400" class="font-medium text-emerald-700">400 초과:</span>
+              <span id="cntOver400" class="font-bold text-emerald-900">0일</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Chart Controls -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Y-Axis Scale Mode Toggle (Bottom) -->
+          <div class="inline-flex rounded-xl bg-amber-50/90 p-1 border border-amber-200">
+            <button id="btnDailyScaleAuto" onclick="setDailyScaleMode('auto')" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-amber-700 shadow-xs transition cursor-pointer">
+              가동일 기준 확대 (Auto)
+            </button>
+            <button id="btnDailyScaleZero" onclick="setDailyScaleMode('zero')" class="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition cursor-pointer">
+              0 기준 (Full)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Chart Canvas Container -->
+      <div class="relative flex-1 w-full min-h-0">
+        <canvas id="dailyChart"></canvas>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Data Paste / Update Modal -->
+  <div id="dataModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-5 flex flex-col gap-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div>
+          <h3 id="modalTitle" class="text-base font-bold text-slate-900">Google Sheet 데이터 업데이트 (ALL 탭)</h3>
+          <p id="modalSubtitle" class="text-xs text-slate-500 mt-0.5">스프레드시트에서 날짜 행부터 Line 1~4 예측/실적 행까지 복사(Ctrl+C) 후 아래에 붙여넣으세요.</p>
+        </div>
+        <button onclick="closeDataModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 space-y-1">
+        <p id="modalGuideTitle" class="font-semibold text-slate-800">지원 형식 안내:</p>
+        <p id="modalGuide1">• Google Sheets의 <code class="bg-white px-1 py-0.5 rounded border">ALL</code> 탭에서 가로 방향(1/1 ~ 11/21...) 테이블 전체를 드래그 복사하여 붙여넣으면 자동으로 파싱됩니다.</p>
+        <p id="modalGuide2">• 포함 항목: 날짜 행(1/1, 1/2...), <code class="bg-white px-1 py-0.5 rounded border">Forecast PLTS</code>, <code class="bg-white px-1 py-0.5 rounded border">Actual</code>, <code class="bg-white px-1 py-0.5 rounded border">Line 1~4</code> 예측 및 실적 행</p>
+      </div>
+
+      <textarea id="pasteInput" rows="7" placeholder="여기에 Google Sheet에서 복사한 탭 구분(TSV) 데이터를 붙여넣으세요..." class="w-full rounded-xl border border-slate-300 p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+
+      <div id="modalFeedback" class="hidden text-xs font-medium px-3 py-2 rounded-lg"></div>
+
+      <div class="flex items-center justify-between pt-1">
+        <button id="btnModalReset" onclick="resetToDefaultData()" class="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+          기본 내장 데이터로 초기화
+        </button>
+        <div class="flex items-center gap-2">
+          <button id="btnModalCancel" onclick="closeDataModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+            취소
+          </button>
+          <button id="btnModalApply" onclick="applyPastedData()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition cursor-pointer">
+            차트에 반영하기
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * ============================================================================
+     * 1. EMBEDDED DATASET FROM GOOGLE SHEETS ("Pulse Point Tracker - ALL" TAB)
+     *    Period: Jan 1, 2026 – Nov 21, 2026
+     * ============================================================================
+     */
+    const RAW_TRACKER_DATA = [
+      {
+        month: 1,
+        days: [
+          { d: "1/1", tp: 0, ta: 110, a1: 22, a2: 64, a3: 0, a4: 24 },
+          { d: "1/2", tp: 200, ta: 532, a1: 137, a2: 272, a3: 0, a4: 123 },
+          { d: "1/3", tp: 215, ta: 596, a1: 208, a2: 255, a3: 0, a4: 133 },
+          { d: "1/4", tp: 323, ta: 490, a1: 196, a2: 241, a3: 0, a4: 53 },
+          { d: "1/5", tp: 208, ta: 416, a1: 207, a2: 70, a3: 0, a4: 139 },
+          { d: "1/6", tp: 473, ta: 426, a1: 69, a2: 131, a3: 0, a4: 226 },
+          { d: "1/7", tp: 415, ta: 558, a1: 225, a2: 127, a3: 0, a4: 206 },
+          { d: "1/8", tp: 315, ta: 557, a1: 165, a2: 201, a3: 0, a4: 191 },
+          { d: "1/9", tp: 315, ta: 612, a1: 176, a2: 290, a3: 0, a4: 146 },
+          { d: "1/10", tp: 434, ta: 699, a1: 270, a2: 251, a3: 0, a4: 178 },
+          { d: "1/11", tp: 315, ta: 504, a1: 103, a2: 259, a3: 0, a4: 142 },
+          { d: "1/12", tp: 551, ta: 542, a1: 191, a2: 213, a3: 0, a4: 138 },
+          { d: "1/13", tp: 551, ta: 662, a1: 230, a2: 207, a3: 0, a4: 225 },
+          { d: "1/14", tp: 520, ta: 667, a1: 269, a2: 258, a3: 0, a4: 140 },
+          { d: "1/15", tp: 875, ta: 638, a1: 161, a2: 229, a3: 0, a4: 248 },
+          { d: "1/16", tp: 875, ta: 675, a1: 243, a2: 223, a3: 0, a4: 209 },
+          { d: "1/17", tp: 875, ta: 669, a1: 307, a2: 228, a3: 0, a4: 134 },
+          { d: "1/18", tp: 879, ta: 684, a1: 288, a2: 239, a3: 0, a4: 157 },
+          { d: "1/19", tp: 906, ta: 275, a1: 99, a2: 114, a3: 0, a4: 62 },
+          { d: "1/20", tp: 906, ta: 449, a1: 137, a2: 158, a3: 0, a4: 154 },
+          { d: "1/21", tp: 906, ta: 507, a1: 170, a2: 169, a3: 0, a4: 168 },
+          { d: "1/22", tp: 906, ta: 596, a1: 190, a2: 201, a3: 0, a4: 205 },
+          { d: "1/23", tp: 906, ta: 733, a1: 246, a2: 269, a3: 0, a4: 218 },
+          { d: "1/24", tp: 906, ta: 708, a1: 240, a2: 231, a3: 0, a4: 237 },
+          { d: "1/25", tp: 906, ta: 622, a1: 197, a2: 218, a3: 0, a4: 207 },
+          { d: "1/26", tp: 906, ta: 595, a1: 176, a2: 221, a3: 0, a4: 198 },
+          { d: "1/27", tp: 906, ta: 547, a1: 183, a2: 204, a3: 0, a4: 160 },
+          { d: "1/28", tp: 946, ta: 602, a1: 179, a2: 301, a3: 0, a4: 122 },
+          { d: "1/29", tp: 946, ta: 596, a1: 191, a2: 169, a3: 0, a4: 236 },
+          { d: "1/30", tp: 946, ta: 492, a1: 156, a2: 195, a3: 0, a4: 141 },
+          { d: "1/31", tp: 750, ta: 387, a1: 0, a2: 201, a3: 0, a4: 186 }
+        ]
+      },
+      {
+        month: 2,
+        days: [
+          { d: "2/1", tp: 0, ta: 3, a1: 2, a2: 1, a3: 0, a4: 0 },
+          { d: "2/2", tp: 0, ta: 184, a1: 47, a2: 70, a3: 0, a4: 67 },
+          { d: "2/3", tp: 670, ta: 705, a1: 233, a2: 255, a3: 0, a4: 217 },
+          { d: "2/4", tp: 906, ta: 693, a1: 236, a2: 191, a3: 0, a4: 266 },
+          { d: "2/5", tp: 906, ta: 745, a1: 249, a2: 257, a3: 0, a4: 239 },
+          { d: "2/6", tp: 670, ta: 730, a1: 272, a2: 206, a3: 0, a4: 252 },
+          { d: "2/7", tp: 355, ta: 800, a1: 260, a2: 263, a3: 0, a4: 277 },
+          { d: "2/8", tp: 0, ta: 509, a1: 83, a2: 194, a3: 0, a4: 232 },
+          { d: "2/9", tp: 906, ta: 760, a1: 231, a2: 255, a3: 0, a4: 274 },
+          { d: "2/10", tp: 1025, ta: 838, a1: 244, a2: 291, a3: 0, a4: 303 },
+          { d: "2/11", tp: 1025, ta: 814, a1: 305, a2: 218, a3: 0, a4: 291 },
+          { d: "2/12", tp: 1025, ta: 643, a1: 297, a2: 46, a3: 0, a4: 300 },
+          { d: "2/13", tp: 710, ta: 673, a1: 262, a2: 108, a3: 0, a4: 303 },
+          { d: "2/14", tp: 0, ta: 289, a1: 1, a2: 285, a3: 0, a4: 3 },
+          { d: "2/15", tp: 0, ta: 556, a1: 127, a2: 238, a3: 0, a4: 191 },
+          { d: "2/16", tp: 591, ta: 679, a1: 287, a2: 114, a3: 0, a4: 278 },
+          { d: "2/17", tp: 946, ta: 761, a1: 342, a2: 216, a3: 0, a4: 203 },
+          { d: "2/18", tp: 710, ta: 665, a1: 267, a2: 281, a3: 0, a4: 117 },
+          { d: "2/19", tp: 710, ta: 686, a1: 80, a2: 242, a3: 0, a4: 364 },
+          { d: "2/20", tp: 1025, ta: 489, a1: 106, a2: 109, a3: 0, a4: 274 },
+          { d: "2/21", tp: 1025, ta: 598, a1: 0, a2: 232, a3: 0, a4: 366 },
+          { d: "2/22", tp: 0, ta: 344, a1: 0, a2: 0, a3: 0, a4: 344 },
+          { d: "2/23", tp: 1025, ta: 287, a1: 0, a2: 0, a3: 0, a4: 287 },
+          { d: "2/24", tp: 710, ta: 350, a1: 0, a2: 0, a3: 0, a4: 350 },
+          { d: "2/25", tp: 434, ta: 515, a1: 134, a2: 0, a3: 0, a4: 381 },
+          { d: "2/26", tp: 630, ta: 607, a1: 305, a2: 0, a3: 0, a4: 302 },
+          { d: "2/27", tp: 590, ta: 603, a1: 291, a2: 0, a3: 0, a4: 312 },
+          { d: "2/28", tp: 630, ta: 648, a1: 318, a2: 0, a3: 0, a4: 330 }
+        ]
+      },
+      {
+        month: 3,
+        days: [
+          { d: "3/1", tp: 0, ta: 56, a1: 0, a2: 3, a3: 0, a4: 53 },
+          { d: "3/2", tp: 355, ta: 439, a1: 85, a2: 211, a3: 0, a4: 143 },
+          { d: "3/3", tp: 591, ta: 638, a1: 330, a2: 0, a3: 0, a4: 308 },
+          { d: "3/4", tp: 1065, ta: 780, a1: 335, a2: 114, a3: 0, a4: 331 },
+          { d: "3/5", tp: 1065, ta: 750, a1: 355, a2: 92, a3: 2, a4: 301 },
+          { d: "3/6", tp: 1065, ta: 721, a1: 151, a2: 240, a3: 3, a4: 327 },
+          { d: "3/7", tp: 1065, ta: 627, a1: 246, a2: 231, a3: 2, a4: 148 },
+          { d: "3/8", tp: 1065, ta: 824, a1: 268, a2: 274, a3: 0, a4: 282 },
+          { d: "3/9", tp: 906, ta: 408, a1: 155, a2: 133, a3: 1, a4: 119 },
+          { d: "3/10", tp: 1025, ta: 895, a1: 333, a2: 305, a3: 0, a4: 257 },
+          { d: "3/11", tp: 1025, ta: 868, a1: 334, a2: 231, a3: 59, a4: 244 },
+          { d: "3/12", tp: 790, ta: 929, a1: 316, a2: 268, a3: 0, a4: 345 },
+          { d: "3/13", tp: 710, ta: 855, a1: 279, a2: 275, a3: 0, a4: 301 },
+          { d: "3/14", tp: 710, ta: 847, a1: 338, a2: 281, a3: 0, a4: 228 },
+          { d: "3/15", tp: 670, ta: 841, a1: 271, a2: 278, a3: 0, a4: 292 },
+          { d: "3/16", tp: 710, ta: 775, a1: 302, a2: 273, a3: 0, a4: 200 },
+          { d: "3/17", tp: 710, ta: 920, a1: 326, a2: 293, a3: 0, a4: 301 },
+          { d: "3/18", tp: 710, ta: 677, a1: 235, a2: 209, a3: 0, a4: 233 },
+          { d: "3/19", tp: 710, ta: 737, a1: 247, a2: 219, a3: 0, a4: 271 },
+          { d: "3/20", tp: 1065, ta: 742, a1: 259, a2: 319, a3: 0, a4: 164 },
+          { d: "3/21", tp: 1025, ta: 694, a1: 280, a2: 270, a3: 0, a4: 144 },
+          { d: "3/22", tp: 0, ta: 463, a1: 110, a2: 193, a3: 0, a4: 160 },
+          { d: "3/23", tp: 1065, ta: 753, a1: 225, a2: 261, a3: 0, a4: 267 },
+          { d: "3/24", tp: 710, ta: 679, a1: 208, a2: 284, a3: 1, a4: 186 },
+          { d: "3/25", tp: 670, ta: 633, a1: 71, a2: 305, a3: 0, a4: 257 },
+          { d: "3/26", tp: 471, ta: 341, a1: 13, a2: 325, a3: 0, a4: 3 },
+          { d: "3/27", tp: 551, ta: 308, a1: 0, a2: 308, a3: 0, a4: 0 },
+          { d: "3/28", tp: 0, ta: 388, a1: 0, a2: 251, a3: 0, a4: 137 },
+          { d: "3/29", tp: 0, ta: 436, a1: 140, a2: 205, a3: 0, a4: 91 },
+          { d: "3/30", tp: 1065, ta: 297, a1: 96, a2: 38, a3: 0, a4: 163 },
+          { d: "3/31", tp: 535, ta: 109, a1: 16, a2: 0, a3: 0, a4: 93 }
+        ]
+      },
+      {
+        month: 4,
+        days: [
+          { d: "4/1", tp: 0, ta: 46, a1: 0, a2: 30, a3: 0, a4: 16 },
+          { d: "4/2", tp: 355, ta: 382, a1: 0, a2: 377, a3: 5, a4: 0 },
+          { d: "4/3", tp: 0, ta: 144, a1: 0, a2: 141, a3: 3, a4: 0 },
+          { d: "4/4", tp: 0, ta: 101, a1: 0, a2: 2, a3: 99, a4: 0 },
+          { d: "4/5", tp: 355, ta: 358, a1: 0, a2: 358, a3: 0, a4: 0 },
+          { d: "4/6", tp: 445, ta: 301, a1: 0, a2: 3, a3: 0, a4: 298 },
+          { d: "4/7", tp: 480, ta: 433, a1: 0, a2: 322, a3: 0, a4: 111 },
+          { d: "4/8", tp: 445, ta: 375, a1: 19, a2: 95, a3: 83, a4: 178 },
+          { d: "4/9", tp: 445, ta: 703, a1: 224, a2: 357, a3: 0, a4: 122 },
+          { d: "4/10", tp: 445, ta: 843, a1: 261, a2: 270, a3: 189, a4: 123 },
+          { d: "4/11", tp: 465, ta: 798, a1: 275, a2: 195, a3: 152, a4: 176 },
+          { d: "4/12", tp: 0, ta: 828, a1: 274, a2: 230, a3: 322, a4: 2 },
+          { d: "4/13", tp: 615, ta: 832, a1: 237, a2: 216, a3: 86, a4: 293 },
+          { d: "4/14", tp: 975, ta: 660, a1: 223, a2: 218, a3: 47, a4: 172 },
+          { d: "4/15", tp: 975, ta: 1062, a1: 231, a2: 218, a3: 345, a4: 268 },
+          { d: "4/16", tp: 1065, ta: 1032, a1: 288, a2: 285, a3: 236, a4: 223 },
+          { d: "4/17", tp: 1065, ta: 1118, a1: 281, a2: 296, a3: 268, a4: 273 },
+          { d: "4/18", tp: 1065, ta: 1081, a1: 261, a2: 273, a3: 316, a4: 231 },
+          { d: "4/19", tp: 250, ta: 972, a1: 236, a2: 230, a3: 273, a4: 233 },
+          { d: "4/20", tp: 1065, ta: 1060, a1: 265, a2: 245, a3: 301, a4: 249 },
+          { d: "4/21", tp: 1065, ta: 1285, a1: 273, a2: 291, a3: 406, a4: 315 },
+          { d: "4/22", tp: 1065, ta: 722, a1: 286, a2: 136, a3: 53, a4: 247 },
+          { d: "4/23", tp: 1065, ta: 734, a1: 242, a2: 222, a3: 0, a4: 270 },
+          { d: "4/24", tp: 1065, ta: 850, a1: 302, a2: 235, a3: 0, a4: 313 },
+          { d: "4/25", tp: 1065, ta: 877, a1: 299, a2: 298, a3: 0, a4: 280 },
+          { d: "4/26", tp: 360, ta: 905, a1: 286, a2: 292, a3: 0, a4: 327 },
+          { d: "4/27", tp: 1065, ta: 840, a1: 282, a2: 253, a3: 0, a4: 305 },
+          { d: "4/28", tp: 1065, ta: 829, a1: 319, a2: 229, a3: 0, a4: 281 },
+          { d: "4/29", tp: 1065, ta: 861, a1: 238, a2: 314, a3: 0, a4: 309 },
+          { d: "4/30", tp: 1025, ta: 833, a1: 282, a2: 274, a3: 0, a4: 277 }
+        ]
+      },
+      {
+        month: 5,
+        days: [
+          { d: "5/1", tp: 0, ta: 28, a1: 13, a2: 7, a3: 0, a4: 8 },
+          { d: "5/2", tp: 900, ta: 23, a1: 23, a2: 0, a3: 0, a4: 0 },
+          { d: "5/3", tp: 975, ta: 342, a1: 102, a2: 119, a3: 0, a4: 121 },
+          { d: "5/4", tp: 1065, ta: 835, a1: 296, a2: 302, a3: 0, a4: 237 },
+          { d: "5/5", tp: 1065, ta: 886, a1: 302, a2: 323, a3: 0, a4: 261 },
+          { d: "5/6", tp: 1065, ta: 976, a1: 308, a2: 326, a3: 0, a4: 342 },
+          { d: "5/7", tp: 1065, ta: 1030, a1: 360, a2: 328, a3: 0, a4: 342 },
+          { d: "5/8", tp: 1035, ta: 983, a1: 330, a2: 327, a3: 0, a4: 326 },
+          { d: "5/9", tp: 1065, ta: 910, a1: 255, a2: 339, a3: 0, a4: 316 },
+          { d: "5/10", tp: 1065, ta: 758, a1: 191, a2: 267, a3: 0, a4: 300 },
+          { d: "5/11", tp: 1065, ta: 825, a1: 219, a2: 302, a3: 0, a4: 304 },
+          { d: "5/12", tp: 1065, ta: 892, a1: 219, a2: 341, a3: 0, a4: 332 },
+          { d: "5/13", tp: 1065, ta: 771, a1: 255, a2: 277, a3: 0, a4: 239 },
+          { d: "5/14", tp: 540, ta: 567, a1: 70, a2: 258, a3: 0, a4: 239 },
+          { d: "5/15", tp: 1065, ta: 856, a1: 263, a2: 295, a3: 0, a4: 298 },
+          { d: "5/16", tp: 1065, ta: 843, a1: 298, a2: 282, a3: 0, a4: 263 },
+          { d: "5/17", tp: 1065, ta: 813, a1: 225, a2: 288, a3: 0, a4: 300 },
+          { d: "5/18", tp: 1065, ta: 717, a1: 226, a2: 196, a3: 0, a4: 295 },
+          { d: "5/19", tp: 1065, ta: 881, a1: 278, a2: 302, a3: 0, a4: 301 },
+          { d: "5/20", tp: 540, ta: 477, a1: 146, a2: 146, a3: 0, a4: 185 },
+          { d: "5/21", tp: 1065, ta: 858, a1: 269, a2: 295, a3: 0, a4: 294 },
+          { d: "5/22", tp: 890, ta: 958, a1: 321, a2: 262, a3: 0, a4: 375 },
+          { d: "5/23", tp: 1065, ta: 864, a1: 240, a2: 274, a3: 0, a4: 350 },
+          { d: "5/24", tp: 1065, ta: 759, a1: 212, a2: 215, a3: 0, a4: 332 },
+          { d: "5/25", tp: 1065, ta: 803, a1: 253, a2: 247, a3: 0, a4: 303 },
+          { d: "5/26", tp: 1065, ta: 853, a1: 262, a2: 275, a3: 0, a4: 316 },
+          { d: "5/27", tp: 1065, ta: 871, a1: 245, a2: 268, a3: 0, a4: 358 },
+          { d: "5/28", tp: 1065, ta: 898, a1: 245, a2: 303, a3: 0, a4: 350 },
+          { d: "5/29", tp: 1065, ta: 934, a1: 314, a2: 277, a3: 0, a4: 343 },
+          { d: "5/30", tp: 0, ta: 0, a1: 0, a2: 0, a3: 0, a4: 0 },
+          { d: "5/31", tp: 0, ta: 0, a1: 0, a2: 0, a3: 0, a4: 0 }
+        ]
+      },
+      {
+        month: 6,
+        days: [
+          { d: "6/1", tp: 1065, ta: 163, a1: 41, a2: 107, a3: 0, a4: 15 },
+          { d: "6/2", tp: 1065, ta: 818, a1: 218, a2: 280, a3: 0, a4: 320 },
+          { d: "6/3", tp: 1065, ta: 786, a1: 233, a2: 245, a3: 0, a4: 308 },
+          { d: "6/4", tp: 920, ta: 816, a1: 206, a2: 284, a3: 0, a4: 326 },
+          { d: "6/5", tp: 1035, ta: 830, a1: 291, a2: 224, a3: 0, a4: 315 },
+          { d: "6/6", tp: 1065, ta: 871, a1: 277, a2: 266, a3: 0, a4: 328 },
+          { d: "6/7", tp: 1035, ta: 826, a1: 271, a2: 211, a3: 0, a4: 344 },
+          { d: "6/8", tp: 1035, ta: 827, a1: 247, a2: 203, a3: 50, a4: 327 },
+          { d: "6/9", tp: 1095, ta: 820, a1: 237, a2: 260, a3: 0, a4: 323 },
+          { d: "6/10", tp: 1223, ta: 712, a1: 249, a2: 173, a3: 0, a4: 290 },
+          { d: "6/11", tp: 1193, ta: 787, a1: 229, a2: 248, a3: 31, a4: 279 },
+          { d: "6/12", tp: 1223, ta: 829, a1: 223, a2: 246, a3: 92, a4: 268 },
+          { d: "6/13", tp: 1223, ta: 836, a1: 217, a2: 236, a3: 125, a4: 258 },
+          { d: "6/14", tp: 1223, ta: 970, a1: 232, a2: 250, a3: 173, a4: 315 },
+          { d: "6/15", tp: 1223, ta: 889, a1: 252, a2: 203, a3: 115, a4: 319 },
+          { d: "6/16", tp: 1223, ta: 1000, a1: 268, a2: 242, a3: 165, a4: 325 },
+          { d: "6/17", tp: 1193, ta: 1107, a1: 277, a2: 295, a3: 194, a4: 341 },
+          { d: "6/18", tp: 868, ta: 991, a1: 236, a2: 258, a3: 149, a4: 348 },
+          { d: "6/19", tp: 898, ta: 880, a1: 221, a2: 174, a3: 212, a4: 273 },
+          { d: "6/20", tp: 916, ta: 714, a1: 210, a2: 101, a3: 102, a4: 301 },
+          { d: "6/21", tp: 1301, ta: 755, a1: 169, a2: 219, a3: 70, a4: 297 },
+          { d: "6/22", tp: 1301, ta: 749, a1: 153, a2: 222, a3: 81, a4: 293 },
+          { d: "6/23", tp: 1065, ta: 888, a1: 205, a2: 262, a3: 89, a4: 332 },
+          { d: "6/24", tp: 1065, ta: 764, a1: 186, a2: 296, a3: 0, a4: 282 },
+          { d: "6/25", tp: 1301, ta: 1000, a1: 240, a2: 273, a3: 139, a4: 348 },
+          { d: "6/26", tp: 1301, ta: 1081, a1: 291, a2: 281, a3: 164, a4: 345 },
+          { d: "6/27", tp: 1301, ta: 965, a1: 195, a2: 245, a3: 203, a4: 322 },
+          { d: "6/28", tp: 1301, ta: 864, a1: 178, a2: 215, a3: 165, a4: 306 },
+          { d: "6/29", tp: 660, ta: 994, a1: 279, a2: 284, a3: 166, a4: 265 },
+          { d: "6/30", tp: 780, ta: 476, a1: 108, a2: 141, a3: 96, a4: 131 }
+        ]
+      },
+      {
+        month: 7,
+        days: [
+          { d: "7/1", tp: 1301, ta: 353, a1: 67, a2: 87, a3: 81, a4: 118 },
+          { d: "7/2", tp: 1301, ta: 810, a1: 163, a2: 180, a3: 216, a4: 251 },
+          { d: "7/3", tp: 1301, ta: 877, a1: 208, a2: 173, a3: 238, a4: 258 },
+          { d: "7/4", tp: 1091, ta: 938, a1: 175, a2: 281, a3: 241, a4: 241 },
+          { d: "7/5", tp: 1061, ta: 910, a1: 230, a2: 235, a3: 191, a4: 254 },
+          { d: "7/6", tp: 1152, ta: 1013, a1: 271, a2: 259, a3: 195, a4: 288 },
+          { d: "7/7", tp: 1017, ta: 993, a1: 199, a2: 237, a3: 257, a4: 300 },
+          { d: "7/8", tp: 1152, ta: 1097, a1: 206, a2: 289, a3: 277, a4: 325 },
+          { d: "7/9", tp: 1152, ta: 1095, a1: 204, a2: 266, a3: 305, a4: 320 },
+          { d: "7/10", tp: 1130, ta: 1045, a1: 188, a2: 289, a3: 270, a4: 298 },
+          { d: "7/11", tp: 1152, ta: 901, a1: 46, a2: 325, a3: 254, a4: 276 },
+          { d: "7/12", tp: 1152, ta: 807, a1: 4, a2: 305, a3: 214, a4: 284 },
+          { d: "7/13", tp: 1152, ta: 900, a1: 116, a2: 225, a3: 270, a4: 289 },
+          { d: "7/14", tp: 1152, ta: 925, a1: 192, a2: 254, a3: 254, a4: 225 },
+          { d: "7/15", tp: 1152, ta: 1018, a1: 232, a2: 226, a3: 266, a4: 294 },
+          { d: "7/16", tp: 1152, ta: 1299, a1: 282, a2: 354, a3: 287, a4: 376 },
+          { d: "7/17", tp: 1152, ta: 1239, a1: 254, a2: 328, a3: 288, a4: 369 },
+          { d: "7/18", tp: 1152, ta: 1104, a1: 198, a2: 250, a3: 302, a4: 354 },
+          { d: "7/19", tp: 1152, ta: 1036, a1: 214, a2: 296, a3: 266, a4: 260 },
+          { d: "7/20", tp: 1128, ta: 969, a1: 153, a2: 265, a3: 261, a4: 290 },
+          { d: "7/21", tp: 1152, ta: 1065, a1: 280, a2: 242, a3: 305, a4: 238 },
+          { d: "7/22", tp: 1152, ta: 991, a1: 224, a2: 257, a3: 171, a4: 339 },
+          { d: "7/23", tp: 1152, ta: 1251, a1: 299, a2: 304, a3: 291, a4: 357 },
+          { d: "7/24", tp: 1152, ta: 1166, a1: 224, a2: 284, a3: 303, a4: 355 },
+          { d: "7/25", tp: 1152, ta: 1165, a1: 272, a2: 250, a3: 304, a4: 339 },
+          { d: "7/26", tp: 1152, ta: 1030, a1: 190, a2: 237, a3: 306, a4: 297 },
+          { d: "7/27", tp: 1152, ta: 867, a1: 243, a2: 147, a3: 283, a4: 194 },
+          { d: "7/28", tp: 1152, ta: 1133, a1: 289, a2: 216, a3: 322, a4: 306 },
+          { d: "7/29", tp: 1152, ta: 1025, a1: 251, a2: 175, a3: 273, a4: 326 },
+          { d: "7/30", tp: 1152, ta: 1012, a1: 247, a2: 208, a3: 282, a4: 275 },
+          { d: "7/31", tp: 0, ta: 973, a1: 148, a2: 196, a3: 293, a4: 336 }
+        ]
+      },
+      {
+        month: 8,
+        days: [
+          { d: "8/1", tp: 1382, ta: 434, a1: 84, a2: 111, a3: 111, a4: 128 },
+          { d: "8/2", tp: 1382, ta: 1105, a1: 240, a2: 256, a3: 217, a4: 392 },
+          { d: "8/3", tp: 1382, ta: 996, a1: 242, a2: 134, a3: 267, a4: 353 },
+          { d: "8/4", tp: 1219, ta: 1061, a1: 260, a2: 142, a3: 281, a4: 378 },
+          { d: "8/5", tp: 1219, ta: 1011, a1: 140, a2: 274, a3: 242, a4: 355 },
+          { d: "8/6", tp: 1382, ta: 1232, a1: 209, a2: 337, a3: 298, a4: 388 },
+          { d: "8/7", tp: 1352, ta: 1059, a1: 245, a2: 245, a3: 237, a4: 332 },
+          { d: "8/8", tp: 1382, ta: 1205, a1: 222, a2: 317, a3: 304, a4: 362 },
+          { d: "8/9", tp: 1382, ta: 1055, a1: 198, a2: 284, a3: 286, a4: 287 },
+          { d: "8/10", tp: 1382, ta: 1121, a1: 201, a2: 341, a3: 297, a4: 282 },
+          { d: "8/11", tp: 1382, ta: 1114, a1: 203, a2: 320, a3: 273, a4: 318 },
+          { d: "8/12", tp: 1382, ta: 1261, a1: 272, a2: 328, a3: 293, a4: 368 },
+          { d: "8/13", tp: 1179, ta: 1230, a1: 291, a2: 322, a3: 251, a4: 366 },
+          { d: "8/14", tp: 1320, ta: 910, a1: 215, a2: 254, a3: 103, a4: 338 },
+          { d: "8/15", tp: 1027, ta: 1175, a1: 268, a2: 252, a3: 283, a4: 372 },
+          { d: "8/16", tp: 1322, ta: 1348, a1: 269, a2: 370, a3: 330, a4: 379 },
+          { d: "8/17", tp: 1382, ta: 1297, a1: 294, a2: 344, a3: 322, a4: 337 },
+          { d: "8/18", tp: 1382, ta: 1423, a1: 389, a2: 385, a3: 330, a4: 319 },
+          { d: "8/19", tp: 1352, ta: 1277, a1: 311, a2: 357, a3: 307, a4: 302 },
+          { d: "8/20", tp: 1382, ta: 1296, a1: 310, a2: 356, a3: 281, a4: 349 },
+          { d: "8/21", tp: 1382, ta: 1338, a1: 377, a2: 365, a3: 238, a4: 358 },
+          { d: "8/22", tp: 1352, ta: 1294, a1: 295, a2: 309, a3: 306, a4: 384 },
+          { d: "8/23", tp: 1352, ta: 1440, a1: 352, a2: 378, a3: 322, a4: 388 },
+          { d: "8/24", tp: 1352, ta: 1350, a1: 335, a2: 293, a3: 354, a4: 368 },
+          { d: "8/25", tp: 1352, ta: 1430, a1: 381, a2: 353, a3: 313, a4: 383 },
+          { d: "8/26", tp: 1352, ta: 1434, a1: 369, a2: 353, a3: 343, a4: 369 },
+          { d: "8/27", tp: 1382, ta: 1191, a1: 194, a2: 336, a3: 290, a4: 371 },
+          { d: "8/28", tp: 1382, ta: 1221, a1: 298, a2: 349, a3: 283, a4: 291 },
+          { d: "8/29", tp: 1382, ta: 1251, a1: 278, a2: 280, a3: 327, a4: 366 },
+          { d: "8/30", tp: 1382, ta: 1315, a1: 313, a2: 318, a3: 308, a4: 376 },
+          { d: "8/31", tp: 0, ta: 1091, a1: 262, a2: 279, a3: 242, a4: 308 }
+        ]
+      },
+      {
+        month: 9,
+        days: [
+          { d: "9/1", tp: 1400, ta: 115, a1: 7, a2: 41, a3: 43, a4: 24 },
+          { d: "9/2", tp: 1400, ta: 1065, a1: 196, a2: 280, a3: 289, a4: 300 },
+          { d: "9/3", tp: 1400, ta: 1230, a1: 244, a2: 310, a3: 333, a4: 343 },
+          { d: "9/4", tp: 1400, ta: 1084, a1: 182, a2: 299, a3: 317, a4: 286 },
+          { d: "9/5", tp: 1400, ta: 1219, a1: 284, a2: 325, a3: 271, a4: 339 },
+          { d: "9/6", tp: 1340, ta: 1268, a1: 284, a2: 338, a3: 263, a4: 383 },
+          { d: "9/7", tp: 1400, ta: 1231, a1: 256, a2: 274, a3: 301, a4: 400 },
+          { d: "9/8", tp: 1370, ta: 1375, a1: 367, a2: 349, a3: 315, a4: 344 },
+          { d: "9/9", tp: 1400, ta: 1303, a1: 329, a2: 321, a3: 329, a4: 324 },
+          { d: "9/10", tp: 1192, ta: 1291, a1: 347, a2: 272, a3: 323, a4: 349 },
+          { d: "9/11", tp: 1400, ta: 1169, a1: 314, a2: 363, a3: 112, a4: 380 },
+          { d: "9/12", tp: 878, ta: 1344, a1: 303, a2: 342, a3: 314, a4: 385 },
+          { d: "9/13", tp: 1391, ta: 1232, a1: 308, a2: 336, a3: 260, a4: 328 },
+          { d: "9/14", tp: 1391, ta: 1204, a1: 280, a2: 258, a3: 285, a4: 381 },
+          { d: "9/15", tp: 1421, ta: 1343, a1: 327, a2: 338, a3: 304, a4: 374 },
+          { d: "9/16", tp: 1421, ta: 1366, a1: 332, a2: 303, a3: 324, a4: 407 },
+          { d: "9/17", tp: 1421, ta: 1370, a1: 357, a2: 310, a3: 339, a4: 364 },
+          { d: "9/18", tp: 1421, ta: 1324, a1: 308, a2: 290, a3: 328, a4: 398 },
+          { d: "9/19", tp: 1421, ta: 1325, a1: 261, a2: 358, a3: 334, a4: 372 },
+          { d: "9/20", tp: 1440, ta: 1476, a1: 362, a2: 357, a3: 361, a4: 396 },
+          { d: "9/21", tp: 1440, ta: 1254, a1: 278, a2: 259, a3: 345, a4: 372 },
+          { d: "9/22", tp: 1440, ta: 1360, a1: 301, a2: 326, a3: 358, a4: 375 },
+          { d: "9/23", tp: 1440, ta: 1437, a1: 311, a2: 337, a3: 389, a4: 400 },
+          { d: "9/24", tp: 1410, ta: 1423, a1: 320, a2: 352, a3: 365, a4: 386 },
+          { d: "9/25", tp: 1440, ta: 1287, a1: 201, a2: 371, a3: 340, a4: 375 },
+          { d: "9/26", tp: 1440, ta: 1224, a1: 210, a2: 339, a3: 325, a4: 350 },
+          { d: "9/27", tp: 1260, ta: 1274, a1: 302, a2: 324, a3: 298, a4: 350 },
+          { d: "9/28", tp: 900, ta: 1280, a1: 281, a2: 322, a3: 337, a4: 340 },
+          { d: "9/29", tp: 1440, ta: 786, a1: 167, a2: 221, a3: 188, a4: 210 },
+          { d: "9/30", tp: 0, ta: 1202, a1: 324, a2: 240, a3: 318, a4: 320 }
+        ]
+      },
+      {
+        month: 10,
+        days: [
+          { d: "10/1", tp: 755, ta: 357, a1: 43, a2: 314, a3: 0, a4: 0 },
+          { d: "10/2", tp: 1510, ta: 846, a1: 285, a2: 359, a3: 102, a4: 100 },
+          { d: "10/3", tp: 1510, ta: 1295, a1: 295, a2: 315, a3: 340, a4: 345 },
+          { d: "10/4", tp: 745, ta: 80, a1: 0, a2: 80, a3: 0, a4: 0 },
+          { d: "10/5", tp: 1480, ta: 524, a1: 184, a2: 340, a3: 0, a4: 0 },
+          { d: "10/6", tp: 1480, ta: 1140, a1: 278, a2: 315, a3: 267, a4: 280 },
+          { d: "10/7", tp: 1480, ta: 1285, a1: 187, a2: 323, a3: 380, a4: 395 },
+          { d: "10/8", tp: 1510, ta: 1270, a1: 346, a2: 347, a3: 285, a4: 292 },
+          { d: "10/9", tp: 1510, ta: 1391, a1: 360, a2: 327, a3: 344, a4: 360 },
+          { d: "10/10", tp: 1510, ta: 1378, a1: 312, a2: 381, a3: 340, a4: 345 },
+          { d: "10/11", tp: 1520, ta: 1377, a1: 273, a2: 341, a3: 375, a4: 388 },
+          { d: "10/12", tp: 1360, ta: 1298, a1: 229, a2: 247, a3: 410, a4: 412 },
+          { d: "10/13", tp: 1550, ta: 966, a1: 326, a2: 336, a3: 150, a4: 154 },
+          { d: "10/14", tp: 1550, ta: 1314, a1: 326, a2: 336, a3: 336, a4: 316 },
+          { d: "10/15", tp: 850, ta: 1485, a1: 391, a2: 396, a3: 323, a4: 375 },
+          { d: "10/16", tp: 1280, ta: 1022, a1: 394, a2: 212, a3: 206, a4: 210 },
+          { d: "10/17", tp: 1310, ta: 1248, a1: 329, a2: 172, a3: 367, a4: 380 },
+          { d: "10/18", tp: 1531, ta: 1161, a1: 279, a2: 241, a3: 315, a4: 326 },
+          { d: "10/19", tp: 1585, ta: 1207, a1: 363, a2: 378, a3: 230, a4: 236 },
+          { d: "10/20", tp: 1585, ta: 1498, a1: 388, a2: 372, a3: 365, a4: 373 },
+          { d: "10/21", tp: 1555, ta: 1447, a1: 366, a2: 330, a3: 370, a4: 381 },
+          { d: "10/22", tp: 1585, ta: 1297, a1: 357, a2: 312, a3: 310, a4: 318 },
+          { d: "10/23", tp: 1585, ta: 1416, a1: 377, a2: 366, a3: 332, a4: 341 },
+          { d: "10/24", tp: 1585, ta: 1476, a1: 403, a2: 363, a3: 350, a4: 360 },
+          { d: "10/25", tp: 1585, ta: 1524, a1: 352, a2: 368, a3: 398, a4: 406 },
+          { d: "10/26", tp: 1585, ta: 1435, a1: 352, a2: 262, a3: 405, a4: 416 },
+          { d: "10/27", tp: 1585, ta: 1230, a1: 390, a2: 377, a3: 230, a4: 233 },
+          { d: "10/28", tp: 1585, ta: 1508, a1: 401, a2: 407, a3: 345, a4: 355 },
+          { d: "10/29", tp: 1485, ta: 1484, a1: 368, a2: 384, a3: 362, a4: 370 },
+          { d: "10/30", tp: 400, ta: 1211, a1: 360, a2: 326, a3: 260, a4: 265 },
+          { d: "10/31", tp: 1600, ta: 1351, a1: 342, a2: 339, a3: 332, a4: 338 }
+        ]
+      },
+      {
+        month: 11,
+        days: [
+          { d: "11/1", tp: 1370, ta: 588, a1: 222, a2: 366, a3: 0, a4: 0 },
+          { d: "11/2", tp: 1600, ta: 1296, a1: 316, a2: 333, a3: 320, a4: 327 },
+          { d: "11/3", tp: 1570, ta: 1213, a1: 349, a2: 317, a3: 270, a4: 277 },
+          { d: "11/4", tp: 1570, ta: 1353, a1: 303, a2: 349, a3: 345, a4: 356 },
+          { d: "11/5", tp: 1400, ta: 1396, a1: 344, a2: 356, a3: 345, a4: 351 },
+          { d: "11/6", tp: 1400, ta: 1319, a1: 324, a2: 339, a3: 325, a4: 331 },
+          { d: "11/7", tp: 1550, ta: 1125, a1: 258, a2: 361, a3: 250, a4: 256 },
+          { d: "11/8", tp: 1500, ta: 1104, a1: 343, a2: 367, a3: 195, a4: 199 },
+          { d: "11/9", tp: 1500, ta: 1320, a1: 335, a2: 373, a3: 302, a4: 310 },
+          { d: "11/10", tp: 1500, ta: 1386, a1: 365, a2: 339, a3: 336, a4: 346 },
+          { d: "11/11", tp: 1470, ta: 1343, a1: 339, a2: 384, a3: 305, a4: 315 },
+          { d: "11/12", tp: 1410, ta: 1423, a1: 356, a2: 360, a3: 351, a4: 356 },
+          { d: "11/13", tp: 1500, ta: 1294, a1: 315, a2: 324, a3: 325, a4: 330 },
+          { d: "11/14", tp: 1570, ta: 958, a1: 341, a2: 323, a3: 145, a4: 149 },
+          { d: "11/15", tp: 1600, ta: 1330, a1: 276, a2: 323, a3: 360, a4: 371 },
+          { d: "11/16", tp: 1600, ta: 1371, a1: 256, a2: 393, a3: 356, a4: 366 },
+          { d: "11/17", tp: 1600, ta: 1313, a1: 248, a2: 382, a3: 336, a4: 347 },
+          { d: "11/18", tp: 1570, ta: 1391, a1: 325, a2: 364, a3: 345, a4: 357 },
+          { d: "11/19", tp: 1600, ta: 1357, a1: 327, a2: 324, a3: 348, a4: 358 },
+          { d: "11/20", tp: 1570, ta: 1412, a1: 330, a2: 362, a3: 355, a4: 365 },
+          { d: "11/21", tp: 1600, ta: 1401, a1: 328, a2: 358, a3: 352, a4: 363 }
+        ]
+      }
+    ];
+
+    /**
+     * ============================================================================
+     * 2. APPLICATION STATE, I18N DICTIONARY & COLOR TOKENS
+     * ============================================================================
+     */
+    let dataset = JSON.parse(JSON.stringify(RAW_TRACKER_DATA));
+    let selectedMonth = 11;         // Default to November 2026
+    let currentLang = 'ko';         // 'ko' | 'en'
+    let monthlyBarMode = 'total';   // 'total' | 'stacked'
+    let monthlyScaleMode = 'auto';  // 'auto' | 'zero'
+    let dailyScaleMode = 'auto';    // 'auto' | 'zero'
+
+    let monthlyChartInstance = null;
+    let dailyChartInstance = null;
+
+    const EN_MONTH_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const EN_MONTH_FULL = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    const I18N = {
+      ko: {
+        headerSubtitle: '월별 총합 생산 실적·예측(Forecast) 및 일일 Line 1~4 생산 현황 대시보드 (PLTS)',
+        btnUpdateMobile: '데이터 업데이트',
+        btnUpdateDesktop: '시트 데이터 붙여넣기',
+        kpiYtdTitle: '연간 누적 실적 / 예측',
+        kpiMonthTitle: (m) => `${m}월 실적 / 예측`,
+        kpiDailyTitle: '가동일 일평균 실적 / 예측',
+        topChartTitle: '1. 월별 총합 생산량 실적(막대) vs 예측(선 그래프)',
+        topChartDesc: '차이 확대(Auto)가 기본 적용되어 예측과 실적 편차가 선명하게 보입니다. 월 막대 클릭 시 하단 차트가 연동됩니다.',
+        btnScaleAuto: '차이 확대 (Auto)',
+        btnScaleZero: '0 기준 (Full)',
+        btnMonthlyTotalBar: '총합 막대',
+        btnMonthlyStackedBar: 'Line 1~4 누적 막대',
+        bottomChartTitle: '2. 일일 Line 1, 2, 3, 4 생산 실적 (병렬 막대)',
+        bottomChartDesc: '선택된 월의 일자별 Line 1~4 가동 실적 비교 (PLTS)',
+        monthSelectLabel: '조회 월:',
+        lblUnder340: '평균 340 미만:',
+        lblOver340: '340 초과:',
+        lblOver360: '360 초과:',
+        lblOver400: '400 초과:',
+        dayUnit: (n) => `${n}일`,
+        btnDailyScaleAuto: '가동일 기준 확대 (Auto)',
+        monthOption: (m) => `2026년 ${m}월`,
+        monthAxisLabel: (m) => `${m}월`,
+        legendMonthlyPlan: '월별 예측 (Forecast PLTS)',
+        legendMonthlyActual: '월별 총 실적 (Actual PLTS)',
+        legendLineActual: (n) => `Line ${n} 실적`,
+        legendLineAvg: '4개 라인 평균 (Avg)',
+        legendDailyMax: '월 최고 실적 (MAX치)',
+        maxPointLabel: (val) => `MAX치: ${val}`,
+        tooltipAchievement: (rate, sign, diff) => `달성률: ${rate}% (${sign}${diff} PLTS)`,
+        tooltipDailyTotal: (total) => `일일 라인 합계 실적: ${total} PLTS`,
+        tooltipDailyLineAvg: (avg) => `4개 라인 평균 실적: ${avg} PLTS`,
+        modalTitle: 'Google Sheet 데이터 업데이트 (ALL 탭)',
+        modalSubtitle: '스프레드시트에서 날짜 행부터 Line 1~4 예측/실적 행까지 복사(Ctrl+C) 후 아래에 붙여넣으세요.',
+        modalGuideTitle: '지원 형식 안내:',
+        modalGuide1: '• Google Sheets의 <code class="bg-white px-1 py-0.5 rounded border">ALL</code> 탭에서 가로 방향(1/1 ~ 11/21...) 테이블 전체를 드래그 복사하여 붙여넣으면 자동으로 파싱됩니다.',
+        modalGuide2: '• 포함 항목: 날짜 행(1/1, 1/2...), <code class="bg-white px-1 py-0.5 rounded border">Forecast PLTS</code>, <code class="bg-white px-1 py-0.5 rounded border">Actual</code>, <code class="bg-white px-1 py-0.5 rounded border">Line 1~4</code> 예측 및 실적 행',
+        pastePlaceholder: '여기에 Google Sheet에서 복사한 탭 구분(TSV) 데이터를 붙여넣으세요...',
+        btnModalReset: '기본 내장 데이터로 초기화',
+        btnModalCancel: '취소',
+        btnModalApply: '차트에 반영하기',
+        msgEmpty: '붙여넣은 데이터가 비어 있습니다.',
+        msgNoDate: '날짜 행(예: 1/1, 1/2...)을 찾을 수 없습니다. 날짜 행을 포함해 복사해주세요.',
+        msgNoData: '유효한 생산 실적/예측 수치를 추출하지 못했습니다.',
+        msgSuccess: (cnt) => `총 ${cnt}개월 데이터가 성공적으로 반영되었습니다!`,
+        msgError: (err) => `데이터 파싱 중 오류가 발생했습니다: ${err}`,
+        msgReset: '시트 기본 데이터(2026년 1월~11월 21일)로 초기화되었습니다.'
+      },
+      en: {
+        headerSubtitle: 'Monthly Total Actual vs. Forecast & Daily Line 1–4 Production Dashboard (PLTS)',
+        btnUpdateMobile: 'Update Data',
+        btnUpdateDesktop: 'Paste Sheet Data',
+        kpiYtdTitle: 'YTD Actual / Forecast',
+        kpiMonthTitle: (m) => `${EN_MONTH_SHORT[m]} Actual / Forecast`,
+        kpiDailyTitle: 'Operating Daily Avg Actual / Forecast',
+        topChartTitle: '1. Monthly Total Production Actual (Bar) vs. Forecast (Line)',
+        topChartDesc: 'Auto-Zoom is enabled by default to highlight variance. Click any monthly bar to sync the daily chart below.',
+        btnScaleAuto: 'Zoom Variance (Auto)',
+        btnScaleZero: 'Zero Baseline (Full)',
+        btnMonthlyTotalBar: 'Total Bar',
+        btnMonthlyStackedBar: 'Line 1–4 Stacked Bar',
+        bottomChartTitle: '2. Daily Line 1, 2, 3, 4 Production Actual (Grouped Bar)',
+        bottomChartDesc: 'Daily Line 1–4 production comparison for the selected month (PLTS)',
+        monthSelectLabel: 'Month:',
+        lblUnder340: 'Avg < 340:',
+        lblOver340: '> 340:',
+        lblOver360: '> 360:',
+        lblOver400: '> 400:',
+        dayUnit: (n) => `${n}d`,
+        btnDailyScaleAuto: 'Operating Days Zoom (Auto)',
+        monthOption: (m) => `${EN_MONTH_FULL[m]} 2026`,
+        monthAxisLabel: (m) => EN_MONTH_SHORT[m],
+        legendMonthlyPlan: 'Monthly Forecast (PLTS)',
+        legendMonthlyActual: 'Monthly Total Actual (PLTS)',
+        legendLineActual: (n) => `Line ${n} Actual`,
+        legendLineAvg: '4-Line Average (Avg)',
+        legendDailyMax: 'Monthly Peak (MAX)',
+        maxPointLabel: (val) => `MAX: ${val}`,
+        tooltipAchievement: (rate, sign, diff) => `Achievement: ${rate}% (${sign}${diff} PLTS)`,
+        tooltipDailyTotal: (total) => `Daily Line Total Actual: ${total} PLTS`,
+        tooltipDailyLineAvg: (avg) => `4-Line Average Actual: ${avg} PLTS`,
+        modalTitle: 'Update Google Sheet Data (ALL Tab)',
+        modalSubtitle: 'Copy (Ctrl+C) rows from the date row through Line 1–4 Forecast/Actual in your sheet and paste below.',
+        modalGuideTitle: 'Supported Format:',
+        modalGuide1: '• Drag and copy the horizontal table (1/1 ~ 11/21...) from the <code class="bg-white px-1 py-0.5 rounded border">ALL</code> tab in Google Sheets to auto-parse.',
+        modalGuide2: '• Included rows: Date row (1/1, 1/2...), <code class="bg-white px-1 py-0.5 rounded border">Forecast PLTS</code>, <code class="bg-white px-1 py-0.5 rounded border">Actual</code>, and <code class="bg-white px-1 py-0.5 rounded border">Line 1–4</code> rows.',
+        pastePlaceholder: 'Paste tab-separated (TSV) data copied from Google Sheets here...',
+        btnModalReset: 'Reset to Default Data',
+        btnModalCancel: 'Cancel',
+        btnModalApply: 'Apply to Charts',
+        msgEmpty: 'Pasted data is empty.',
+        msgNoDate: 'Could not find a date row (e.g., 1/1, 1/2...). Please include the date row when copying.',
+        msgNoData: 'No valid production actual or forecast figures were found.',
+        msgSuccess: (cnt) => `Successfully loaded ${cnt} months of production data!`,
+        msgError: (err) => `Error parsing pasted data: ${err}`,
+        msgReset: 'Reset to default sheet dataset (Jan 1 – Nov 21, 2026).'
+      }
+    };
+
+    function t(key, ...args) {
+      const entry = I18N[currentLang][key];
+      return typeof entry === 'function' ? entry(...args) : entry;
+    }
+
+    const COLORS = {
+      line1: { bg: '#1e40af', border: '#172554' }, // 진한 파랑 (Blue 800)
+      line2: { bg: '#2563eb', border: '#1e3a8a' }, // 중간 파랑 (Blue 600)
+      line3: { bg: '#60a5fa', border: '#2563eb' }, // 조금 연한 파랑 (Blue 400)
+      line4: { bg: '#bfdbfe', border: '#3b82f6' }  // 연한 파랑 (Blue 200)
+    };
+
+    /**
+     * ============================================================================
+     * 3. HELPER FUNCTIONS: DATA AGGREGATION, ZOOM BOUNDS & KPI UPDATES
+     * ============================================================================
+     */
+    function getZoomedBounds(values, step = 100) {
+      const valid = values.filter(v => typeof v === 'number' && v > 0);
+      if (valid.length === 0) return { min: 0, max: undefined };
+
+      const rawMin = Math.min(...valid);
+      const rawMax = Math.max(...valid);
+      const span = Math.max(rawMax - rawMin, step);
+      const padding = span * 0.25;
+
+      const min = Math.max(0, Math.floor((rawMin - padding) / step) * step);
+      const max = Math.ceil((rawMax + padding * 0.7) / step) * step;
+      return { min, max };
+    }
+
+    function computeMonthlySummaries() {
+      return dataset.map(m => {
+        const sumPlan = m.days.reduce((acc, d) => acc + d.tp, 0);
+        const sumActual = m.days.reduce((acc, d) => acc + d.ta, 0);
+        const a1 = m.days.reduce((acc, d) => acc + d.a1, 0);
+        const a2 = m.days.reduce((acc, d) => acc + d.a2, 0);
+        const a3 = m.days.reduce((acc, d) => acc + d.a3, 0);
+        const a4 = m.days.reduce((acc, d) => acc + d.a4, 0);
+        return {
+          month: m.month,
+          label: t('monthAxisLabel', m.month),
+          plan: sumPlan,
+          actual: sumActual,
+          a1, a2, a3, a4
+        };
+      });
+    }
+
+    function populateMonthDropdown() {
+      const select = document.getElementById('monthSelect');
+      select.innerHTML = dataset
+        .map(m => `<option value="${m.month}" ${m.month === Number(selectedMonth) ? 'selected' : ''}>${t('monthOption', m.month)}</option>`)
+        .join('');
+    }
+
+    function applyStaticTranslations() {
+      document.documentElement.lang = currentLang;
+      document.getElementById('headerSubtitle').textContent = t('headerSubtitle');
+      document.getElementById('btnUpdateMobile').textContent = t('btnUpdateMobile');
+      document.getElementById('btnUpdateDesktopText').textContent = t('btnUpdateDesktop');
+
+      document.getElementById('kpiYtdTitle').textContent = t('kpiYtdTitle');
+      document.getElementById('kpiDailyTitle').textContent = t('kpiDailyTitle');
+
+      document.getElementById('topChartTitle').textContent = t('topChartTitle');
+      document.getElementById('topChartDesc').textContent = t('topChartDesc');
+      document.getElementById('btnMonthlyScaleAuto').textContent = t('btnScaleAuto');
+      document.getElementById('btnMonthlyScaleZero').textContent = t('btnScaleZero');
+      document.getElementById('btnMonthlyTotalBar').textContent = t('btnMonthlyTotalBar');
+      document.getElementById('btnMonthlyStackedBar').textContent = t('btnMonthlyStackedBar');
+
+      document.getElementById('bottomChartTitle').textContent = t('bottomChartTitle');
+      document.getElementById('bottomChartDesc').textContent = t('bottomChartDesc');
+      document.getElementById('monthSelectLabel').textContent = t('monthSelectLabel');
+      document.getElementById('lblUnder340').textContent = t('lblUnder340');
+      document.getElementById('lblOver340').textContent = t('lblOver340');
+      document.getElementById('lblOver360').textContent = t('lblOver360');
+      document.getElementById('lblOver400').textContent = t('lblOver400');
+      document.getElementById('btnDailyScaleAuto').textContent = t('btnDailyScaleAuto');
+      document.getElementById('btnDailyScaleZero').textContent = t('btnScaleZero');
+
+      document.getElementById('modalTitle').textContent = t('modalTitle');
+      document.getElementById('modalSubtitle').textContent = t('modalSubtitle');
+      document.getElementById('modalGuideTitle').textContent = t('modalGuideTitle');
+      document.getElementById('modalGuide1').innerHTML = t('modalGuide1');
+      document.getElementById('modalGuide2').innerHTML = t('modalGuide2');
+      document.getElementById('pasteInput').placeholder = t('pastePlaceholder');
+      document.getElementById('btnModalReset').textContent = t('btnModalReset');
+      document.getElementById('btnModalCancel').textContent = t('btnModalCancel');
+      document.getElementById('btnModalApply').textContent = t('btnModalApply');
+    }
+
+    function updateKPIs(summaries, currentMonthObj) {
+      // 1. YTD Totals
+      const ytdPlan = summaries.reduce((acc, s) => acc + s.plan, 0);
+      const ytdActual = summaries.reduce((acc, s) => acc + s.actual, 0);
+      const ytdRate = ytdPlan > 0 ? ((ytdActual / ytdPlan) * 100).toFixed(1) : '0.0';
+
+      document.getElementById('kpiYtdActual').textContent = ytdActual.toLocaleString();
+      document.getElementById('kpiYtdPlan').textContent = ytdPlan.toLocaleString();
+      document.getElementById('kpiYtdRate').textContent = `${ytdRate}%`;
+
+      // 2. Selected Month Totals
+      const mSummary = summaries.find(s => s.month === currentMonthObj.month) || { plan: 0, actual: 0 };
+      const mRate = mSummary.plan > 0 ? ((mSummary.actual / mSummary.plan) * 100).toFixed(1) : '0.0';
+
+      document.getElementById('kpiMonthTitle').textContent = t('kpiMonthTitle', currentMonthObj.month);
+      document.getElementById('kpiMonthActual').textContent = mSummary.actual.toLocaleString();
+      document.getElementById('kpiMonthPlan').textContent = mSummary.plan.toLocaleString();
+      document.getElementById('kpiMonthRate').textContent = `${mRate}%`;
+
+      // 3. Operating Days Daily Average & Achievement %
+      const opDays = currentMonthObj.days.filter(d => d.ta > 0 || d.tp > 0);
+      const opCount = opDays.length || 1;
+      const avgActual = Math.round(mSummary.actual / opCount);
+      const avgPlan = Math.round(mSummary.plan / opCount);
+      const dailyRate = avgPlan > 0 ? ((avgActual / avgPlan) * 100).toFixed(1) : '0.0';
+
+      document.getElementById('kpiDailyAvg').textContent = avgActual.toLocaleString();
+      document.getElementById('kpiDailyPlanAvg').textContent = avgPlan.toLocaleString();
+      document.getElementById('kpiDailyRate').textContent = `${dailyRate}%`;
+    }
+
+    /**
+     * ============================================================================
+     * 4. RENDER TOP CHART (MONTHLY TOTAL ACTUAL BAR VS FORECAST LINE)
+     * ============================================================================
+     */
+    function renderMonthlyChart(summaries) {
+      const ctx = document.getElementById('monthlyChart').getContext('2d');
+      if (monthlyChartInstance) {
+        monthlyChartInstance.destroy();
+      }
+
+      const labels = summaries.map(s => s.label);
+      const valuesForScale = summaries.flatMap(s => [s.plan, s.actual]);
+      const bounds = monthlyScaleMode === 'auto'
+        ? getZoomedBounds(valuesForScale, 500)
+        : { min: 0, max: undefined };
+
+      const datasets = [
+        {
+          type: 'line',
+          label: t('legendMonthlyPlan'),
+          data: summaries.map(s => s.plan),
+          borderColor: '#f43f5e',
+          backgroundColor: '#f43f5e',
+          borderWidth: 2.5,
+          borderDash: [5, 4],
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.25,
+          order: 0
+        }
+      ];
+
+      if (monthlyBarMode === 'total') {
+        datasets.push({
+          type: 'bar',
+          label: t('legendMonthlyActual'),
+          data: summaries.map(s => s.actual),
+          backgroundColor: summaries.map(s =>
+            s.month === Number(selectedMonth) ? '#1d4ed8' : '#60a5fa'
+          ),
+          borderRadius: 6,
+          maxBarThickness: 44,
+          order: 1
+        });
+      } else {
+        datasets.push(
+          {
+            type: 'bar',
+            label: t('legendLineActual', 1),
+            data: summaries.map(s => s.a1),
+            backgroundColor: COLORS.line1.bg,
+            stack: 'actualStack',
+            maxBarThickness: 44,
+            order: 1
+          },
+          {
+            type: 'bar',
+            label: t('legendLineActual', 2),
+            data: summaries.map(s => s.a2),
+            backgroundColor: COLORS.line2.bg,
+            stack: 'actualStack',
+            maxBarThickness: 44,
+            order: 1
+          },
+          {
+            type: 'bar',
+            label: t('legendLineActual', 3),
+            data: summaries.map(s => s.a3),
+            backgroundColor: COLORS.line3.bg,
+            stack: 'actualStack',
+            maxBarThickness: 44,
+            order: 1
+          },
+          {
+            type: 'bar',
+            label: t('legendLineActual', 4),
+            data: summaries.map(s => s.a4),
+            backgroundColor: COLORS.line4.bg,
+            borderRadius: { topLeft: 6, topRight: 6 },
+            stack: 'actualStack',
+            maxBarThickness: 44,
+            order: 1
+          }
+        );
+      }
+
+      monthlyChartInstance = new Chart(ctx, {
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          onClick: (_, elements) => {
+            if (elements && elements.length > 0) {
+              const idx = elements[0].index;
+              const clickedMonth = summaries[idx]?.month;
+              if (clickedMonth) {
+                selectedMonth = clickedMonth;
+                document.getElementById('monthSelect').value = String(clickedMonth);
+                updateDashboard();
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              align: 'end',
+              labels: { usePointStyle: true, boxWidth: 8, font: { size: 11, weight: '600' } }
+            },
+            tooltip: {
+              backgroundColor: 'rgba(15, 23, 42, 0.94)',
+              padding: 10,
+              cornerRadius: 10,
+              callbacks: {
+                afterBody: (items) => {
+                  const idx = items[0].dataIndex;
+                  const s = summaries[idx];
+                  if (!s) return [];
+                  const diff = s.actual - s.plan;
+                  const rate = s.plan > 0 ? ((s.actual / s.plan) * 100).toFixed(1) : '0.0';
+                  const sign = diff >= 0 ? '+' : '';
+                  return [
+                    `────────────────────`,
+                    t('tooltipAchievement', rate, sign, diff.toLocaleString())
+                  ];
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              stacked: monthlyBarMode === 'stacked',
+              grid: { display: false },
+              ticks: { font: { size: 11, weight: '600' }, color: '#334155' }
+            },
+            y: {
+              min: bounds.min,
+              max: bounds.max,
+              stacked: monthlyBarMode === 'stacked',
+              grid: { color: '#e2e8f0' },
+              ticks: {
+                font: { size: 11 },
+                color: '#64748b',
+                callback: (val) => val.toLocaleString()
+              }
+            }
+          }
+        }
+      });
+    }
+
+    /**
+     * ============================================================================
+     * 5. RENDER BOTTOM CHART (DAILY LINE 1~4 ACTUAL GROUPED BARS ONLY)
+     * ============================================================================
+     */
+    function renderDailyChart(monthObj) {
+      const ctx = document.getElementById('dailyChart').getContext('2d');
+      if (dailyChartInstance) {
+        dailyChartInstance.destroy();
+      }
+
+      const days = monthObj ? monthObj.days : [];
+      const labels = days.map(d => d.d);
+
+      // Find the peak daily total actual (MAX치) within the selected month
+      let maxVal = 0;
+      let maxIdx = -1;
+      days.forEach((d, idx) => {
+        const daySum = d.ta > 0 ? d.ta : (d.a1 + d.a2 + d.a3 + d.a4);
+        if (daySum > maxVal) {
+          maxVal = daySum;
+          maxIdx = idx;
+        }
+      });
+
+      const maxPointData = days.map((_, idx) => (idx === maxIdx && maxVal > 0 ? maxVal : null));
+
+      // Calculate daily 4-line average (total of Line 1~4 divided by 4)
+      const lineAvgData = days.map(d => {
+        const sum = d.a1 + d.a2 + d.a3 + d.a4;
+        return sum > 0 ? Math.round((sum / 4) * 10) / 10 : 0;
+      });
+
+      // Update daily average tier count boxes (operating days where sum > 0)
+      const activeAvgs = lineAvgData.filter(v => v > 0);
+      const under340 = activeAvgs.filter(v => v < 340).length;
+      const over340 = activeAvgs.filter(v => v > 340).length;
+      const over360 = activeAvgs.filter(v => v > 360).length;
+      const over400 = activeAvgs.filter(v => v > 400).length;
+
+      document.getElementById('cntUnder340').textContent = t('dayUnit', under340);
+      document.getElementById('cntOver340').textContent = t('dayUnit', over340);
+      document.getElementById('cntOver360').textContent = t('dayUnit', over360);
+      document.getElementById('cntOver400').textContent = t('dayUnit', over400);
+
+      // Y-axis scale is strictly based on individual Line 1~4 bars (not stretched by MAX total)
+      const valuesForScale = days.flatMap(d => [d.a1, d.a2, d.a3, d.a4]);
+
+      const bounds = dailyScaleMode === 'auto'
+        ? getZoomedBounds(valuesForScale, 50)
+        : { min: 0, max: undefined };
+
+      // Add a small headroom above the tallest individual line bar so the top MAX badge never overlaps bars
+      if (bounds.max !== undefined) {
+        const span = Math.max(bounds.max - (bounds.min || 0), 50);
+        bounds.max = Math.ceil((bounds.max + span * 0.14) / 25) * 25;
+      }
+
+      // Custom plugin to draw the MAX dot & "MAX치: X,XXX" badge at the top of the peak date without stretching Y-axis
+      const maxBadgePlugin = {
+        id: 'maxBadgePlugin',
+        afterDatasetsDraw(chart) {
+          if (maxIdx === -1 || maxVal <= 0) return;
+          const xScale = chart.scales.x;
+          const chartArea = chart.chartArea;
+          if (!xScale || !chartArea) return;
+
+          const xPos = xScale.getPixelForValue(maxIdx);
+          const dotY = chartArea.top + 32;
+
+          const { ctx: c } = chart;
+          const text = t('maxPointLabel', maxVal.toLocaleString());
+          c.save();
+
+          // Subtle vertical guide line from MAX dot down to the bars
+          c.strokeStyle = 'rgba(225, 29, 72, 0.35)';
+          c.lineWidth = 1.5;
+          c.setLineDash([3, 3]);
+          c.beginPath();
+          c.moveTo(xPos, dotY + 6);
+          c.lineTo(xPos, chartArea.bottom);
+          c.stroke();
+          c.setLineDash([]);
+
+          // Draw MAX dot
+          c.fillStyle = '#e11d48';
+          c.strokeStyle = '#ffffff';
+          c.lineWidth = 2;
+          c.beginPath();
+          c.arc(xPos, dotY, 5.5, 0, Math.PI * 2);
+          c.fill();
+          c.stroke();
+
+          // Draw MAX badge pill right above the dot
+          c.font = '700 11px Inter, "Noto Sans KR", sans-serif';
+          const textWidth = c.measureText(text).width;
+          const padX = 8;
+          const boxW = textWidth + padX * 2;
+          const boxH = 21;
+
+          let boxX = xPos - boxW / 2;
+          if (boxX < chartArea.left + 4) boxX = chartArea.left + 4;
+          if (boxX + boxW > chartArea.right - 4) boxX = chartArea.right - boxW - 4;
+
+          const boxY = chartArea.top + 3;
+
+          c.fillStyle = '#e11d48';
+          c.beginPath();
+          c.roundRect(boxX, boxY, boxW, boxH, 6);
+          c.fill();
+
+          // Small downward pointer triangle
+          c.beginPath();
+          c.moveTo(xPos - 4, boxY + boxH);
+          c.lineTo(xPos + 4, boxY + boxH);
+          c.lineTo(xPos, boxY + boxH + 4);
+          c.closePath();
+          c.fill();
+
+          // Label text
+          c.fillStyle = '#ffffff';
+          c.textAlign = 'center';
+          c.textBaseline = 'middle';
+          c.fillText(text, boxX + boxW / 2, boxY + boxH / 2 + 0.5);
+          c.restore();
+        }
+      };
+
+      const datasets = [
+        {
+          type: 'line',
+          label: t('legendDailyMax'),
+          data: [],
+          borderColor: '#e11d48',
+          backgroundColor: '#e11d48',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          pointRadius: 5.5,
+          showLine: false,
+          order: 0
+        },
+        {
+          type: 'line',
+          label: t('legendLineAvg'),
+          data: lineAvgData,
+          borderColor: '#f59e0b',
+          backgroundColor: '#f59e0b',
+          borderWidth: 2.5,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0.25,
+          order: 0
+        },
+        {
+          type: 'bar',
+          label: t('legendLineActual', 1),
+          data: days.map(d => d.a1),
+          backgroundColor: COLORS.line1.bg,
+          borderRadius: 3,
+          order: 1
+        },
+        {
+          type: 'bar',
+          label: t('legendLineActual', 2),
+          data: days.map(d => d.a2),
+          backgroundColor: COLORS.line2.bg,
+          borderRadius: 3,
+          order: 1
+        },
+        {
+          type: 'bar',
+          label: t('legendLineActual', 3),
+          data: days.map(d => d.a3),
+          backgroundColor: COLORS.line3.bg,
+          borderRadius: 3,
+          order: 1
+        },
+        {
+          type: 'bar',
+          label: t('legendLineActual', 4),
+          data: days.map(d => d.a4),
+          backgroundColor: COLORS.line4.bg,
+          borderRadius: 3,
+          order: 1
+        }
+      ];
+
+      dailyChartInstance = new Chart(ctx, {
+        data: { labels, datasets },
+        plugins: [maxBadgePlugin],
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              position: 'top',
+              align: 'end',
+              labels: { usePointStyle: true, boxWidth: 8, font: { size: 11, weight: '600' } }
+            },
+            tooltip: {
+              backgroundColor: 'rgba(15, 23, 42, 0.94)',
+              padding: 10,
+              cornerRadius: 10,
+              callbacks: {
+                afterBody: (items) => {
+                  const idx = items[0].dataIndex;
+                  const d = days[idx];
+                  if (!d) return [];
+                  const avgVal = lineAvgData[idx] ?? 0;
+                  return [
+                    `────────────────────`,
+                    t('tooltipDailyLineAvg', avgVal.toLocaleString()),
+                    t('tooltipDailyTotal', d.ta.toLocaleString())
+                  ];
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              stacked: false,
+              grid: { display: false },
+              ticks: { font: { size: 10, weight: '500' }, color: '#334155', maxRotation: 0 }
+            },
+            y: {
+              min: bounds.min,
+              max: bounds.max,
+              stacked: false,
+              grid: { color: '#e2e8f0' },
+              ticks: {
+                font: { size: 11 },
+                color: '#64748b',
+                callback: (val) => val.toLocaleString()
+              }
+            }
+          }
+        }
+      });
+    }
+
+    /**
+     * ============================================================================
+     * 6. UI CONTROL HANDLERS & FULL DASHBOARD REFRESH
+     * ============================================================================
+     */
+    function syncToggleStyles() {
+      const activeAmber = 'px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-amber-700 shadow-xs transition cursor-pointer';
+      const inactive = 'px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition cursor-pointer';
+
+      // Language Switcher Styles
+      const langActiveDesktop = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-xs transition cursor-pointer';
+      const langInactiveDesktop = 'px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition cursor-pointer';
+      const langActiveMobile = 'px-2 py-1 rounded-md text-[11px] font-semibold bg-indigo-600 text-white transition cursor-pointer';
+      const langInactiveMobile = 'px-2 py-1 rounded-md text-[11px] font-medium text-slate-300 hover:text-white transition cursor-pointer';
+
+      document.getElementById('btnLangKoDesktop').className = currentLang === 'ko' ? langActiveDesktop : langInactiveDesktop;
+      document.getElementById('btnLangEnDesktop').className = currentLang === 'en' ? langActiveDesktop : langInactiveDesktop;
+      document.getElementById('btnLangKoMobile').className = currentLang === 'ko' ? langActiveMobile : langInactiveMobile;
+      document.getElementById('btnLangEnMobile').className = currentLang === 'en' ? langActiveMobile : langInactiveMobile;
+
+      document.getElementById('btnMonthlyScaleAuto').className = monthlyScaleMode === 'auto' ? activeAmber : inactive;
+      document.getElementById('btnMonthlyScaleZero').className = monthlyScaleMode === 'zero' ? activeAmber : inactive;
+
+      document.getElementById('btnMonthlyTotalBar').className = monthlyBarMode === 'total'
+        ? 'px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-indigo-700 shadow-xs transition cursor-pointer'
+        : inactive;
+      document.getElementById('btnMonthlyStackedBar').className = monthlyBarMode === 'stacked'
+        ? 'px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-indigo-700 shadow-xs transition cursor-pointer'
+        : inactive;
+
+      document.getElementById('btnDailyScaleAuto').className = dailyScaleMode === 'auto' ? activeAmber : inactive;
+      document.getElementById('btnDailyScaleZero').className = dailyScaleMode === 'zero' ? activeAmber : inactive;
+    }
+
+    function updateDashboard() {
+      applyStaticTranslations();
+      populateMonthDropdown();
+      syncToggleStyles();
+      const summaries = computeMonthlySummaries();
+      const currentMonthObj = dataset.find(m => m.month === Number(selectedMonth)) || dataset[dataset.length - 1];
+      if (currentMonthObj) selectedMonth = currentMonthObj.month;
+
+      updateKPIs(summaries, currentMonthObj);
+      renderMonthlyChart(summaries);
+      renderDailyChart(currentMonthObj);
+    }
+
+    function setLanguage(lang) { currentLang = lang; updateDashboard(); }
+    function setMonthlyScaleMode(mode) { monthlyScaleMode = mode; updateDashboard(); }
+    function setMonthlyMode(mode) { monthlyBarMode = mode; updateDashboard(); }
+    function setDailyScaleMode(mode) { dailyScaleMode = mode; updateDashboard(); }
+    function handleMonthChange(val) { selectedMonth = Number(val); updateDashboard(); }
+
+    /**
+     * ============================================================================
+     * 7. GOOGLE SHEET TSV PASTE PARSER & MODAL CONTROLS
+     * ============================================================================
+     */
+    function openDataModal() {
+      const modal = document.getElementById('dataModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.getElementById('modalFeedback').classList.add('hidden');
+    }
+
+    function closeDataModal() {
+      const modal = document.getElementById('dataModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function showModalMessage(msg, isError = false) {
+      const el = document.getElementById('modalFeedback');
+      el.textContent = msg;
+      el.className = isError
+        ? 'text-xs font-medium px-3 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-200'
+        : 'text-xs font-medium px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200';
+      el.classList.remove('hidden');
+    }
+
+    function parseNum(str) {
+      if (!str) return 0;
+      const cleaned = str.replace(/,/g, '').trim();
+      if (cleaned === '-' || cleaned === '') return 0;
+      const num = Number(cleaned);
+      return isNaN(num) ? 0 : num;
+    }
+
+    function applyPastedData() {
+      const raw = document.getElementById('pasteInput').value.trim();
+      if (!raw) {
+        showModalMessage(t('msgEmpty'), true);
+        return;
+      }
+
+      try {
+        const rows = raw.split(/\r?\n/).map(r => r.split('\t'));
+        // Find date header row (contains patterns like 1/1, 1/2, etc.)
+        let dateRowIdx = -1;
+        let firstDateCol = -1;
+
+        for (let r = 0; r < rows.length; r++) {
+          for (let c = 0; c < rows[r].length; c++) {
+            if (/^\d{1,2}\/\d{1,2}$/.test(rows[r][c].trim())) {
+              dateRowIdx = r;
+              firstDateCol = c;
+              break;
+            }
+          }
+          if (dateRowIdx !== -1) break;
+        }
+
+        if (dateRowIdx === -1) {
+          showModalMessage(t('msgNoDate'), true);
+          return;
+        }
+
+        // Identify metric rows below date row
+        let tpRow = null, taRow = null;
+        const planLines = [], actualLines = [];
+
+        for (let r = dateRowIdx + 1; r < rows.length; r++) {
+          const label = (rows[r][0] || rows[r][1] || '').toLowerCase();
+          if (label.includes('forecast')) tpRow = rows[r];
+          else if (label === 'actual' || label.startsWith('actual')) taRow = rows[r];
+          else if (/line\s*[1-4]/i.test(label)) {
+            if (actualLines.length < 4 && (taRow !== null || planLines.length >= 4)) {
+              actualLines.push(rows[r]);
+            } else if (planLines.length < 4) {
+              planLines.push(rows[r]);
+            } else if (actualLines.length < 4) {
+              actualLines.push(rows[r]);
+            }
+          }
+        }
+
+        const monthMap = new Map();
+        const dateRow = rows[dateRowIdx];
+        for (let c = firstDateCol; c < dateRow.length; c++) {
+          const dStr = (dateRow[c] || '').trim();
+          const match = dStr.match(/^(\d{1,2})\/(\d{1,2})$/);
+          if (!match) continue;
+
+          const mNum = Number(match[1]);
+          if (!monthMap.has(mNum)) monthMap.set(mNum, []);
+
+          const p1 = planLines[0] ? parseNum(planLines[0][c]) : 0;
+          const p2 = planLines[1] ? parseNum(planLines[1][c]) : 0;
+          const p3 = planLines[2] ? parseNum(planLines[2][c]) : 0;
+          const p4 = planLines[3] ? parseNum(planLines[3][c]) : 0;
+
+          const a1 = actualLines[0] ? parseNum(actualLines[0][c]) : 0;
+          const a2 = actualLines[1] ? parseNum(actualLines[1][c]) : 0;
+          const a3 = actualLines[2] ? parseNum(actualLines[2][c]) : 0;
+          const a4 = actualLines[3] ? parseNum(actualLines[3][c]) : 0;
+
+          const tp = tpRow ? parseNum(tpRow[c]) : (p1 + p2 + p3 + p4);
+          const ta = taRow ? parseNum(taRow[c]) : (a1 + a2 + a3 + a4);
+
+          if (tp > 0 || ta > 0 || mNum <= 11) {
+            monthMap.get(mNum).push({ d: dStr, tp, ta, p1, p2, p3, p4, a1, a2, a3, a4 });
+          }
+        }
+
+        const parsedMonths = Array.from(monthMap.entries())
+          .filter(([, days]) => days.some(x => x.tp > 0 || x.ta > 0))
+          .map(([month, days]) => ({ month, days }));
+
+        if (parsedMonths.length === 0) {
+          showModalMessage(t('msgNoData'), true);
+          return;
+        }
+
+        dataset = parsedMonths;
+        selectedMonth = parsedMonths[parsedMonths.length - 1].month;
+        updateDashboard();
+        showModalMessage(t('msgSuccess', parsedMonths.length));
+      } catch (err) {
+        showModalMessage(t('msgError', err.message), true);
+      }
+    }
+
+    function resetToDefaultData() {
+      dataset = JSON.parse(JSON.stringify(RAW_TRACKER_DATA));
+      selectedMonth = 11;
+      document.getElementById('pasteInput').value = '';
+      updateDashboard();
+      showModalMessage(t('msgReset'));
+    }
+
+    // Initialize dashboard immediately
+    window.addEventListener('DOMContentLoaded', () => {
+      updateDashboard();
+    });
+  </script>
+</body>
+</html>
