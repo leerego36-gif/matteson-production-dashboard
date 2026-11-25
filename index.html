@@ -311,7 +311,7 @@
     /**
      * ============================================================================
      * 1. EMBEDDED DATASET FROM GOOGLE SHEETS ("Pulse Point Tracker - ALL" TAB)
-     *    Period: Jan 1, 2026 – Nov 21, 2026
+     *    Period: Jan 1, 2026 – Nov 22, 2026
      * ============================================================================
      */
     const RAW_TRACKER_DATA = [
@@ -691,8 +691,9 @@
           { d: "11/17", tp: 1600, ta: 1313, a1: 248, a2: 382, a3: 336, a4: 347 },
           { d: "11/18", tp: 1570, ta: 1391, a1: 325, a2: 364, a3: 345, a4: 357 },
           { d: "11/19", tp: 1600, ta: 1357, a1: 327, a2: 324, a3: 348, a4: 358 },
-          { d: "11/20", tp: 1570, ta: 1412, a1: 330, a2: 362, a3: 355, a4: 365 },
-          { d: "11/21", tp: 1600, ta: 1401, a1: 328, a2: 358, a3: 352, a4: 363 }
+          { d: "11/20", tp: 1570, ta: 1412, a1: 325, a2: 324, a3: 360, a4: 403 },
+          { d: "11/21", tp: 1600, ta: 1401, a1: 327, a2: 362, a3: 324, a4: 388 },
+          { d: "11/22", tp: 1600, ta: 1412, a1: 337, a2: 365, a3: 322, a4: 388 }
         ]
       }
     ];
@@ -712,8 +713,10 @@
     let monthlyChartInstance = null;
     let dailyChartInstance = null;
 
+    const DIRECT_SHEET_ID = '1oc4bLKBXnJYkdYDU9uhcIyPgFq1zjoD75odImqJjB9I';
+    const DIRECT_SHEET_GID = '368619135';
     const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSmAW6Q58szs3lKBgchDYnvchsnm7kCMSyNQCOEsDIc14BnrR5zEq5Y1F1jKSuRGLh_zVlh8b0-pa9Z/pub?gid=368619135&output=csv';
-    const STORAGE_KEY_SHEET_URL = 'matteson_tracker_sheet_url_v4';
+    const STORAGE_KEY_SHEET_URL = 'matteson_tracker_sheet_url_v5';
     const AUTO_REFRESH_INTERVAL_MS = 60000; // 60초마다 구글 시트 변경사항 자동 동기화
     let autoRefreshTimer = null;
 
@@ -773,7 +776,7 @@
         msgSyncSuccess: (cnt, time) => `Google Sheet 실시간 동기화 완료! (${cnt}개월 데이터 반영 · ${time})`,
         msgSyncFail: '시트를 불러오지 못했습니다. Google Sheets에서 [파일 → 공유 → 웹에 게시]가 활성화되어 있는지 확인해주세요.',
         msgError: (err) => `데이터 파싱 중 오류가 발생했습니다: ${err}`,
-        msgReset: '시트 기본 데이터(2026년 1월~11월 21일)로 초기화되었습니다.'
+        msgReset: '시트 기본 데이터(2026년 1월~11월 22일)로 초기화되었습니다.'
       },
       en: {
         headerSubtitle: 'Monthly Total Actual vs. Forecast & Daily Line 1–4 Production Dashboard (PLTS)',
@@ -827,7 +830,7 @@
         msgSyncSuccess: (cnt, time) => `Google Sheet live sync complete! (${cnt} months loaded · ${time})`,
         msgSyncFail: 'Unable to fetch sheet. Please ensure [File → Share → Publish to web] is enabled on your Google Sheet.',
         msgError: (err) => `Error parsing pasted data: ${err}`,
-        msgReset: 'Reset to default sheet dataset (Jan 1 – Nov 21, 2026).'
+        msgReset: 'Reset to default sheet dataset (Jan 1 – Nov 22, 2026).'
       }
     };
 
@@ -1403,7 +1406,7 @@
 
     /**
      * ============================================================================
-     * 7. GOOGLE SHEET LIVE AUTO-SYNC, CSV/TSV PARSER & MODAL CONTROLS
+     * 7. GOOGLE SHEET LIVE AUTO-SYNC, MULTI-LINE CSV/TSV PARSER & MODAL CONTROLS
      * ============================================================================
      */
     function openDataModal() {
@@ -1432,52 +1435,79 @@
 
     function parseNum(str) {
       if (!str) return 0;
-      const cleaned = str.replace(/,/g, '').trim();
+      const cleaned = String(str).replace(/,/g, '').trim();
       if (cleaned === '-' || cleaned === '') return 0;
       const num = Number(cleaned);
       return isNaN(num) ? 0 : num;
     }
 
-    function splitCsvLine(line) {
-      const result = [];
+    /**
+     * Full RFC-4180 compliant CSV parser that properly preserves quoted multi-line cells
+     * (such as Google Sheet header cells containing "Sun\n11/22")
+     */
+    function parseCsvMatrix(text) {
+      const rows = [];
+      let row = [];
       let current = '';
       let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const next = text[i + 1];
+
         if (ch === '"') {
-          if (inQuotes && line[i + 1] === '"') {
+          if (inQuotes && next === '"') {
             current += '"';
             i++;
           } else {
             inQuotes = !inQuotes;
           }
         } else if (ch === ',' && !inQuotes) {
-          result.push(current);
+          row.push(current);
+          current = '';
+        } else if ((ch === '\r' || ch === '\n') && !inQuotes) {
+          if (ch === '\r' && next === '\n') i++;
+          row.push(current);
+          rows.push(row);
+          row = [];
           current = '';
         } else {
           current += ch;
         }
       }
-      result.push(current);
-      return result;
+      if (current.length > 0 || row.length > 0) {
+        row.push(current);
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    function extractDateToken(cellStr) {
+      if (!cellStr) return null;
+      // Matches standalone M/D or multi-line "Sun\n11/22" or "11/22/2026"
+      const m = String(cellStr).match(/(?:^|[\s\r\n])(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?(?:$|[\s\r\n])/);
+      if (!m) return null;
+      const month = Number(m[1]);
+      const day = Number(m[2]);
+      if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+      return `${month}/${day}`;
     }
 
     function parseTabularRows(raw, delimiter = '\t') {
-      const lines = raw.split(/\r?\n/);
       const rows = delimiter === ','
-        ? lines.map(splitCsvLine)
-        : lines.map(r => r.split('\t'));
+        ? parseCsvMatrix(raw)
+        : raw.split(/\r?\n/).map(r => r.split('\t'));
 
       let dateRowIdx = -1;
       let firstDateCol = -1;
 
-      // Find the row that contains multiple M/D date headers (e.g., 1/1, 1/2, 1/3...)
+      // Find the row that contains multiple M/D date headers (including multi-line "Sun\n11/22")
       for (let r = 0; r < rows.length; r++) {
         let dateCount = 0;
         let firstCol = -1;
         for (let c = 0; c < rows[r].length; c++) {
-          const cell = (rows[r][c] || '').trim();
-          if (/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(cell)) {
+          const token = extractDateToken(rows[r][c]);
+          if (token) {
             if (firstCol === -1) firstCol = c;
             dateCount++;
           }
@@ -1513,12 +1543,10 @@
       const monthMap = new Map();
       const dateRow = rows[dateRowIdx];
       for (let c = firstDateCol; c < dateRow.length; c++) {
-        const dStrRaw = (dateRow[c] || '').trim();
-        const match = dStrRaw.match(/^(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?$/);
-        if (!match) continue;
+        const dStr = extractDateToken(dateRow[c]);
+        if (!dStr) continue;
 
-        const mNum = Number(match[1]);
-        const dStr = `${mNum}/${Number(match[2])}`;
+        const mNum = Number(dStr.split('/')[0]);
         if (!monthMap.has(mNum)) monthMap.set(mNum, []);
 
         const p1 = planLines[0] ? parseNum(planLines[0][c]) : 0;
@@ -1550,13 +1578,12 @@
       const url = (sheetUrl || '').trim();
       if (!url) return null;
       if (url.includes('output=csv') || url.includes('/pub')) {
-        // Remove single=true if present (causes 400 error when sheet was published as Entire document)
         let cleanUrl = url.replace(/([?&])single=true(&?)/, (_, p1, p2) => (p2 ? p1 : ''));
         let pubUrl = cleanUrl.includes('output=csv')
           ? cleanUrl
           : (cleanUrl.includes('?') ? `${cleanUrl}&output=csv` : `${cleanUrl}?output=csv`);
         if (!pubUrl.includes('gid=')) {
-          pubUrl += '&gid=368619135';
+          pubUrl += `&gid=${DIRECT_SHEET_GID}`;
         }
         return pubUrl;
       }
@@ -1564,31 +1591,26 @@
       if (!idMatch) return null;
       const sheetId = idMatch[1];
       const gidMatch = url.match(/gid=(\d+)/);
-      const gid = gidMatch ? gidMatch[1] : '368619135';
+      const gid = gidMatch ? gidMatch[1] : DIRECT_SHEET_GID;
       return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
-    }
-
-    function buildGoogleGvizUrl(sheetUrl) {
-      if ((sheetUrl || '').includes('/spreadsheets/d/e/')) return null;
-      const idMatch = (sheetUrl || '').match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-      if (!idMatch) return null;
-      const gidMatch = (sheetUrl || '').match(/gid=(\d+)/);
-      const gid = gidMatch ? gidMatch[1] : '368619135';
-      return `https://docs.google.com/spreadsheets/d/${idMatch[1]}/gviz/tq?tqx=out:csv&gid=${gid}`;
     }
 
     async function syncFromGoogleSheet(showFeedbackInModal = false) {
       const rawUrl = localStorage.getItem(STORAGE_KEY_SHEET_URL) || DEFAULT_SHEET_URL;
       const primaryUrl = buildGoogleCsvExportUrl(rawUrl);
-      // Also include fallback without gid in case sheet was published with single tab only
       const noGidFallback = primaryUrl && primaryUrl.includes('gid=')
         ? primaryUrl.replace(/([?&])gid=\d+(&?)/, (_, p1, p2) => (p2 ? p1 : ''))
         : null;
+      const directGvizUrl = `https://docs.google.com/spreadsheets/d/${DIRECT_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${DIRECT_SHEET_GID}`;
+      const directExportUrl = `https://docs.google.com/spreadsheets/d/${DIRECT_SHEET_ID}/export?format=csv&gid=${DIRECT_SHEET_GID}`;
+
       const candidateUrls = [
+        directGvizUrl,
         primaryUrl,
         noGidFallback,
-        buildGoogleGvizUrl(rawUrl)
+        directExportUrl
       ].filter(Boolean);
+
       const badge = document.getElementById('liveStatusBadge');
       const spinner = document.getElementById('syncSpinner');
 
